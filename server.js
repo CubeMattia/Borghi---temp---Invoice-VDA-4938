@@ -1,116 +1,152 @@
 const fastify = require('fastify')({ logger: true });
-const { XMLParser } = require('fast-xml-parser');
-const fs = require('fs').promises;
+const fs = require('fs');
 const path = require('path');
+const { XMLParser } = require('fast-xml-parser');
 
-// Configurazione del parser per preservare gli attributi senza prefisso
+// Configurazione avanzata del parser XML
 const parser = new XMLParser({
   ignoreAttributes: false,
-  attributeNamePrefix: ""
+  attributeNamePrefix: "@_",
+  textNodeName: "#text",
+  alwaysCreateTextNode: true,
+  trimValues: true,
+  removeNSPrefix: true,
+  isArray: (name, jpath) => ['E1EDKA1', 'E1EDP01'].includes(name)
 });
 
-/**
- * Genera dinamicamente la stringa di un segmento EDI.
- * @param {string} segmentTag - Il nome del tag del segmento (es. "EDI_DC40", "E1IDOCENHANCEMENT", …).
- * @param {object} segmentObj - L'oggetto contenente gli elementi del segmento.
- * @returns {string} La stringa EDI del segmento.
- */
-function generateSegment(segmentTag, segmentObj) {
-  let segmentStr = segmentTag;
-  // Itera dinamicamente su tutte le chiavi dell'oggetto segmento
-  for (const key in segmentObj) {
-    // Escludi attributi che non devono comparire (es. "SEGMENT" o "BEGIN")
-    if (key === 'SEGMENT' || key === 'BEGIN') continue;
-    let value = segmentObj[key];
-    // Se il valore è un oggetto (o un array), lo converto in stringa; se necessario, si potrebbe gestire in modo più specifico
-    if (typeof value === 'object' && value !== null) {
-      if (Array.isArray(value)) {
-        // Unisce gli elementi dell'array separati da una virgola
-        value = value.map(item => (typeof item === 'object' ? JSON.stringify(item) : item)).join(',');
-      } else {
-        value = value.toString();
-      }
-    }
-    segmentStr += '*' + value;
-  }
-  return segmentStr;
-}
+// Funzioni di utilità
+const safeExtract = (obj, path, def = '') => {
+  return path.split('.').reduce((acc, key) => acc?.[key]?.['#text'] ?? acc?.[key] ?? def, obj) || def;
+};
 
-/**
- * Genera dinamicamente l'intero contenuto EDI a partire dall'oggetto JSON ottenuto dal file XML.
- * Si assume la seguente struttura:
- * {
- *   ZEWM_G217_IN: {
- *     IDOC: {
- *       BEGIN: "1",
- *       <segmento1>: { ... },
- *       <segmento2>: { ... },
- *       <segmentoN>: { ... }
- *     }
- *   }
- * }
- * @param {object} ediJson - L'oggetto JSON ottenuto dal parsing del file XML.
- * @returns {string} La stringa EDI formattata, con ogni segmento su una nuova riga.
- */
-function generateDynamicEdi(ediJson) {
-  let segments = [];
-  // Naviga dinamicamente fino al nodo IDOC
-  const idoc = ediJson?.ZEWM_G217_IN?.IDOC;
-  if (!idoc) {
-    return 'Formato XML non valido: IDOC non trovato';
-  }
-  // Itera su tutte le chiavi di IDOC (ad eccezione degli attributi come BEGIN)
-  Object.keys(idoc).forEach(key => {
-    if (key === 'BEGIN') return; // salta l'attributo
-    let segmentData = idoc[key];
-    // Se ci sono più occorrenze dello stesso segmento, il parser restituisce un array
-    if (Array.isArray(segmentData)) {
-      segmentData.forEach(seg => segments.push(generateSegment(key, seg)));
-    } else if (typeof segmentData === 'object') {
-      segments.push(generateSegment(key, segmentData));
+const formatDate = (date) => date ? date.replace(/-/g, '') : '';
+const formatTime = (time) => time ? time.replace(/:/g, '') : '';
+const formatNumber = (num, decimals = 2) => {
+  const n = parseFloat(num) || 0;
+  return n.toFixed(decimals).replace('.', ',');
+};
+
+// Mappatura IDOC -> EDI
+function mapToEDI(data) {
+  const IDOC = data.IDOC || {};
+  console.log(data.IDOC)
+  const segments = [];
+  const items = IDOC.E1EDP01 || [];
+
+  // Segmenti di testata
+  segments.push(
+    `UNB+UNOC:3+${safeExtract(IDOC, 'EDI_DC40.SNDPOR')}:92+${safeExtract(IDOC, 'EDI_DC40.RCVPOR')}:91+` +
+    `${formatDate(safeExtract(IDOC, 'EDI_DC40.CREDAT'))}${formatTime(safeExtract(IDOC, 'EDI_DC40.CRETIM'))}+2569'`,
+    `UNH+INVOIC:D:07A:UN:GA0131'`,
+    `BGM+380:${safeExtract(IDOC, 'E1EDK01.BELNR')}+9'`,
+    `DTM+137:${formatDate(safeExtract(IDOC, 'E1EDK01.BLDAT'))}:102'`,
+    `DTM+1:${formatDate(safeExtract(IDOC, 'E1EDK02.DATUM'))}:102'`,
+    `FTX+TXD:TAXFREE SUPPLY'`,
+    `GEI+PM+::272'`
+  );
+
+  // Partner commerciali
+  const partners = IDOC.E1EDKA1 || [];
+  partners.forEach(partner => {
+    const parvw = safeExtract(partner, 'PARVW');
+    const partn = safeExtract(partner, 'PARTN');
+    const address = [
+      safeExtract(partner, 'STRAS'),
+      safeExtract(partner, 'ORT1'),
+      safeExtract(partner, 'PSTLZ'),
+      safeExtract(partner, 'LAND1')
+    ].filter(Boolean).join('+');
+
+    if(parvw === 'RS') {
+      segments.push(
+        `NAD+ST+:${partn}::92++${address}'`,
+        `RFF+VA:${safeExtract(partner, 'PAORG')}'`
+      );
+    }
+    if(parvw === 'RE') {
+      segments.push(
+        `NAD+BY+:${partn}::92++${address}'`,
+        `RFF+VA:${safeExtract(IDOC, 'E1EDK01.KUNDEUINR')}'`,
+        `RFF+XA:${safeExtract(IDOC, 'E1EDK01.KUNDEUINR')}'`
+      );
     }
   });
-  // Unisce i segmenti: ogni segmento termina con '~' e viene posizionato su una nuova riga
-  return segments.map(s => s + '~');
+
+  // Dati pagamento
+  segments.push(
+    `CUX+2::${safeExtract(IDOC, 'E1EDK01.WAERK')}:4'`,
+    `DTM+134:${formatDate(safeExtract(IDOC, 'E1EDK03.DATUM'))}:102'`,
+    `PYT+1++:2+D+30'`,
+    `DTM+171:${formatDate(safeExtract(IDOC, 'E1EDK03.DATUM'))}:102'`,
+    `FII+BF+:${safeExtract(IDOC, 'E1EDS01.KNUMV')}'`
+  );
+
+  // Righe documento
+  items.forEach((item, index) => {
+    segments.push(
+      `LIN+:${index + 1}++${safeExtract(item, 'IDTNR')}:IN'`,
+      `IMD+++1:++11::272:${safeExtract(item, 'KTEXT')}'`,
+      `QTY+47::${safeExtract(item, 'MENGE')}:PCE'`,
+      `ALI+:${safeExtract(item, 'HERKL')}'`,
+      `MOA+203:${formatNumber(safeExtract(item, 'E1EDK05.KRATE'))}:EUR'`,
+      `PRI+AAA:${formatNumber(safeExtract(item, 'E1EDK05.UPRBS'), 2)}::PCE:1'`,
+      `RFF+ON::${safeExtract(item, 'XABLN')}'`,
+      `RFF+AAK:${safeExtract(item, 'E1EDP04.MSATZ')}'`,
+      `DTM+171:${formatDate(safeExtract(IDOC, 'E1EDK03.DATUM'))}:102'`,
+      `TAX+7:VAT+++:::0'`
+    );
+  });
+
+  // Totali
+  segments.push(
+    `CNT+2:${items.length}'`,
+    `MOA+77:${formatNumber(safeExtract(IDOC, 'E1EDS01.SUMME'))}:EUR'`,
+    `MOA+125:${formatNumber(safeExtract(IDOC, 'E1EDS01.BTWR'))}:EUR'`,
+    `MOA+176:0,00:EUR'`,
+    `MOA+79:${formatNumber(safeExtract(IDOC, 'E1EDS01.SUMME'))}:EUR'`,
+    `MOA+403:0,00:EUR'`,
+    `TAX+7:VAT+++:::0'`,
+    `MOA+124:0,00:EUR'`,
+    `MOA+125:${formatNumber(safeExtract(IDOC, 'E1EDS01.BTWR'))}:EUR'`,
+    `UNT+39:39'`,
+    `UNZ+1+1:2569'`
+  );
+
+  return segments.join('\n');
 }
 
-// Endpoint Fastify per leggere il file XML locale, generare il contenuto EDI in modo dinamico e salvarlo in un file
-fastify.post('/generate-edi', async (request, reply) => {
+// Endpoint
+fastify.post("/process-invoice", async (request, reply) => {
   try {
-    // Definizione dei percorsi per la cartella e i file
-    const testFolder = path.join(__dirname, 'test');
-    const xmlFilePath = path.join(testFolder, 'test.xml');
-    const ediFilePath = path.join(testFolder, 'test.txt');
+    const xmlPath = path.join(__dirname, "test/InvoiceIdoc.xml");
+    const ediPath = path.join(__dirname, "test/IDOC_EDI.txt");
 
-    // Lettura del file XML in modalità UTF-8
-    const xmlData = await fs.readFile(xmlFilePath, 'utf8');
-    // Parsing dinamico dell'XML in JSON
+    const xmlData = fs.readFileSync(xmlPath, "utf8");
     const jsonData = parser.parse(xmlData);
-    // Generazione dinamica del contenuto EDI
-    const ediContent = generateDynamicEdi(jsonData);
 
-    // Crea la cartella "test" se non esiste già
-    await fs.mkdir(testFolder, { recursive: true });
-    // Scrittura del contenuto EDI nel file
-    await fs.writeFile(ediFilePath, ediContent);
+    const ediContent = mapToEDI(jsonData);
+    fs.writeFileSync(ediPath, ediContent);
 
-    reply.send({ 
-      message: `File EDI generato con successo in ${ediFilePath}`, 
-      ediContent 
-    });
-  } catch (error) {
-    reply.status(500).send({
-      error: 'Errore durante la lettura, il parsing o la scrittura dei file',
-      details: error.message
-    });
+    return {
+      status: "Conversione completata",
+      path: ediPath,
+      content: ediContent,
+    };
+  } catch (err) {
+    fastify.log.error(err);
+    reply.code(500).send({ error: "Errore di conversione" });
   }
 });
 
-// Utilizzo della nuova sintassi per fastify.listen che accetta un oggetto di opzioni
-fastify.listen({ port: 3000, host: '0.0.0.0' }, (err, address) => {
-  if (err) {
+// Avvio server
+const start = async () => {
+  try {
+    await fastify.listen({ port: 3000, host: "0.0.0.0" });
+    fastify.log.info(`Server in ascolto su ${fastify.server.address().port}`);
+  } catch (err) {
     fastify.log.error(err);
     process.exit(1);
   }
-  fastify.log.info(`Server in ascolto su ${address}`);
-});
+};
+
+start();

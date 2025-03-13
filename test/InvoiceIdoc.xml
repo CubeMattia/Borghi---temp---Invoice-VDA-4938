@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<IDOC xmlns="http://sap.com/idoc/INVOIC">
+    <EDI_DC40>
+        <DOCNUM>000000000001234</DOCNUM>
+        <MESTYP>INVOIC</MESTYP>
+        <SNDPOR>SAPMAN</SNDPOR>
+        <RCVPOR>PARTNER_PORT</RCVPOR>
+        <CREDAT>2024-05-28</CREDAT>
+        <CRETIM>09:58:00</CRETIM>
+    </EDI_DC40>
+    <E1EDK01>
+        <BELNR>INV-98765</BELNR>
+        <BSART>RE</BSART>
+        <BLDAT>2024-05-28</BLDAT>
+        <WAERK>EUR</WAERK>
+        <KUNDEUINR>IT01234567890</KUNDEUINR>
+        <CURCY>EUR</CURCY>
+    </E1EDK01>
+    <E1EDK02>
+        <QUALF>009</QUALF>
+        <BELNR>ORD-12345</BELNR>
+        <DATUM>2024-05-25</DATUM>
+    </E1EDK02>
+    <E1EDK03>
+        <DATUM>2024-05-28</DATUM>
+    </E1EDK03>
+    <E1EDKA1>
+        <PARVW>RS</PARVW>
+        <PARTN>80068232</PARTN>
+        <STRAS>Via Roma 1</STRAS>
+        <ORT1>Milano</ORT1>
+        <PSTLZ>20100</PSTLZ>
+        <LAND1>IT</LAND1>
+        <PAORG>IT_STCEG</PAORG>
+    </E1EDKA1>
+    <E1EDKA1>
+        <PARVW>RE</PARVW>
+        <PARTN>CUSTOMER_123</PARTN>
+        <STRAS>Via Torino 2</STRAS>
+        <ORT1>Roma</ORT1>
+        <PSTLZ>00100</PSTLZ>
+        <LAND1>IT</LAND1>
+    </E1EDKA1>
+    <E1EDK18>
+        <ZTERM_TXT>Pagamento 30 giorni</ZTERM_TXT>
+    </E1EDK18>
+    <E1EDP01>
+        <POSEX>0001</POSEX>
+        <IDTNR>MAT-001</IDTNR>
+        <KTEXT>Prodotto X - F23</KTEXT>
+        <MENGE>10</MENGE>
+        <MENEE>PC</MENEE>
+        <HERKL>IT</HERKL>
+        <XABLN>DLV-556677</XABLN>
+        <E1EDK05>
+            <KRATE>15.00</KRATE>
+            <MEAUN>PC</MEAUN>
+            <UPRBS>150.00</UPRBS>
+        </E1EDK05>
+        <E1EDP19>
+            <TAXCD>V1</TAXCD>
+            <NETWR>150.00</NETWR>
+            <MWSBT>33.00</MWSBT>
+        </E1EDP19>
+        <E1EDP04>
+            <MSATZ>22.00</MSATZ>
+        </E1EDP04>
+    </E1EDP01>
+    <E1EDS01>
+        <SUMME>183.00</SUMME>
+        <WAERQ>EUR</WAERQ>
+        <BTWR>183.00</BTWR>
+        <KNUMV>123456</KNUMV>
+    </E1EDS01>
+</IDOC>

@@ -1,1 +1,0 @@
-EDI_DC40*EDI_DC40*string*A*2***ZEWM_G217_IN*string*A*AB**string*string*string*A*string*string*string*string*string*string*string*string*string~ZEWM_G217_IN~E1IDOCENHANCEMENT*string~E1IDOCENHANCEMENT*string*string~E1IDOCENHANCEMENT*string*string~E1IDOCENHANCEMENT~E1IDOCENHANCEMENT*string~
