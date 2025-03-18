@@ -1,7 +1,7 @@
-const fastify = require('fastify')({ logger: true });
-const fs = require('fs');
-const path = require('path');
-const { XMLParser } = require('fast-xml-parser');
+const fastify = require("fastify")({ logger: true });
+const fs = require("fs");
+const path = require("path");
+const { XMLParser } = require("fast-xml-parser");
 
 // Configurazione avanzata del parser XML
 const parser = new XMLParser({
@@ -11,114 +11,192 @@ const parser = new XMLParser({
   alwaysCreateTextNode: true,
   trimValues: true,
   removeNSPrefix: true,
-  isArray: (name, jpath) => ['E1EDKA1', 'E1EDP01'].includes(name)
+  isArray: (name, jpath) => ["E1EDKA1", "E1EDP01"].includes(name),
 });
 
 // Funzioni di utilità
-const safeExtract = (obj, path, def = '') => {
-  return path.split('.').reduce((acc, key) => acc?.[key]?.['#text'] ?? acc?.[key] ?? def, obj) || def;
+const toArray = (obj) => {
+  if (!obj) return [];
+  return Array.isArray(obj) ? obj : [obj];
 };
 
-const formatDate = (date) => date ? date.replace(/-/g, '') : '';
-const formatTime = (time) => time ? time.replace(/:/g, '') : '';
+const safeExtract = (obj, path, def = "") => {
+  return (
+    path.split(".").reduce((acc, key) => {
+      const value = acc?.[key];
+      return value?.["#text"] ?? value ?? def;
+    }, obj) || def
+  );
+};
+
+const formatDate = (date) => (date ? date.replace(/-/g, "") : "");
+const formatTime = (time) => (time ? time.replace(/:/g, "") : "");
 const formatNumber = (num, decimals = 2) => {
   const n = parseFloat(num) || 0;
-  return n.toFixed(decimals).replace('.', ',');
+  return n.toFixed(decimals).replace(".", ",");
 };
 
-// Mappatura IDOC -> EDI
 function mapToEDI(data) {
   const IDOC = data.IDOC || {};
-  console.log(data.IDOC)
-  const segments = [];
-  const items = IDOC.E1EDP01 || [];
 
-  // Segmenti di testata
+  // Estrazione centralizzata di tutti i segmenti IDOC
+  const EDI_DC40 = IDOC.EDI_DC40 || {};
+  const E1EDK01 = IDOC.E1EDK01 || {};
+  const E1EDK02 = IDOC.E1EDK02 || {};
+  const E1EDK03 =
+    toArray(IDOC.E1EDK03).find((e) => safeExtract(e, "IDDAT") === "026") || {};
+  const E1EDKA1 = IDOC.E1EDKA1 || [];
+  const E1EDK18 = IDOC.E1EDK18 || {};
+  const E1EDS01 = IDOC.E1EDS01 || {};
+
+  // Estrazione gerarchica della E1EDP01
+  const E1EDP01 = toArray(IDOC.E1EDP01).map((item) => ({
+    POSEX: safeExtract(item, "POSEX"),
+    IDTNR: safeExtract(item, "IDTNR"),
+    KTEXT: safeExtract(item, "KTEXT"),
+    MENGE: safeExtract(item, "MENGE"),
+    MENEE: safeExtract(item, "MENEE"),
+    HERKL: safeExtract(item, "HERKL"),
+    XABLN: safeExtract(item, "XABLN"),
+    E1EDK05: {
+      KRATE: safeExtract(item.E1EDK05, "KRATE"),
+      MEAUN: safeExtract(item.E1EDK05, "MEAUN"),
+      UPRBS: safeExtract(item.E1EDK05, "UPRBS"),
+    },
+    E1EDP19: {
+      TAXCD: safeExtract(item.E1EDP19, "TAXCD"),
+      NETWR: safeExtract(item.E1EDP19, "NETWR"),
+      MWSBT: safeExtract(item.E1EDP19, "MWSBT"),
+    },
+    E1EDP04: {
+      MSATZ: safeExtract(item.E1EDP04, "MSATZ"),
+    },
+  }));
+
+  const segments = [];
+
+  // SEZIONE TESTATA
   segments.push(
-    `UNB+UNOC:3+${safeExtract(IDOC, 'EDI_DC40.SNDPOR')}:92+${safeExtract(IDOC, 'EDI_DC40.RCVPOR')}:91+` +
-    `${formatDate(safeExtract(IDOC, 'EDI_DC40.CREDAT'))}${formatTime(safeExtract(IDOC, 'EDI_DC40.CRETIM'))}+2569'`,
+    // Segmento UNB
+    `UNB+UNOC:3+${safeExtract(EDI_DC40, "SNDPOR")}:92+${safeExtract(    
+      EDI_DC40,
+      "RCVPOR"
+    )}:91+` +
+      `${formatDate(safeExtract(EDI_DC40, "CREDAT"))}${formatTime(
+        safeExtract(EDI_DC40, "CRETIM")
+      )}+2569'`,
+
+    // Segmento UNH
     `UNH+INVOIC:D:07A:UN:GA0131'`,
-    `BGM+380:${safeExtract(IDOC, 'E1EDK01.BELNR')}+9'`,
-    `DTM+137:${formatDate(safeExtract(IDOC, 'E1EDK01.BLDAT'))}:102'`,
-    `DTM+1:${formatDate(safeExtract(IDOC, 'E1EDK02.DATUM'))}:102'`,
-    `FTX+TXD:TAXFREE SUPPLY'`,
+
+    // Segmento BGM
+    `BGM+380:${safeExtract(E1EDK01, "BELNR")}+9'`,
+
+    // Segmenti DTM
+    `DTM+137:${formatDate(safeExtract(E1EDK01, "BLDAT"))}:102'`,
+    `DTM+1:${formatDate(safeExtract(E1EDK02, "DATUM"))}:102'`,
+
+    // Segmento FTX
+    `FTX+TXD:${safeExtract(E1EDK18, "ZTERM_TXT")}'`,
+
+    // Segmento GEI
     `GEI+PM+::272'`
   );
 
-  // Partner commerciali
-  const partners = IDOC.E1EDKA1 || [];
-  partners.forEach(partner => {
-    const parvw = safeExtract(partner, 'PARVW');
-    const partn = safeExtract(partner, 'PARTN');
-    const address = [
-      safeExtract(partner, 'STRAS'),
-      safeExtract(partner, 'ORT1'),
-      safeExtract(partner, 'PSTLZ'),
-      safeExtract(partner, 'LAND1')
-    ].filter(Boolean).join('+');
+  // PARTNER COMMERCIALI
+  toArray(E1EDKA1).forEach((partner) => {
+    const partnerData = {
+      PARVW: safeExtract(partner, "PARVW"),
+      PARTN: safeExtract(partner, "PARTN"),
+      NAME1: safeExtract(partner, "NAME1"),
+      STRAS: safeExtract(partner, "STRAS"),
+      ORT1: safeExtract(partner, "ORT1"),
+      PSTLZ: safeExtract(partner, "PSTLZ"),
+      LAND1: safeExtract(partner, "LAND1"),
+      PAORG: safeExtract(partner, "PAORG"),
+    };
 
-    if(parvw === 'RS') {
+    if (partnerData.PARVW === "RS") {
       segments.push(
-        `NAD+ST+:${partn}::92++${address}'`,
-        `RFF+VA:${safeExtract(partner, 'PAORG')}'`
+        `NAD+ST+:${partnerData.PARTN}::92++` +
+          `${[
+            partnerData.STRAS,
+            partnerData.ORT1,
+            partnerData.PSTLZ,
+            partnerData.LAND1,
+          ]
+            .filter(Boolean)
+            .join("+")}'`,
+        `RFF+VA:${partnerData.PAORG}'`
       );
     }
-    if(parvw === 'RE') {
+    if (partnerData.PARVW === "RE") {
       segments.push(
-        `NAD+BY+:${partn}::92++${address}'`,
-        `RFF+VA:${safeExtract(IDOC, 'E1EDK01.KUNDEUINR')}'`,
-        `RFF+XA:${safeExtract(IDOC, 'E1EDK01.KUNDEUINR')}'`
+        `NAD+BY+:${partnerData.PARTN}::92++` +
+          `${[
+            partnerData.STRAS,
+            partnerData.ORT1,
+            partnerData.PSTLZ,
+            partnerData.LAND1,
+          ]
+            .filter(Boolean)
+            .join("+")}'`,
+        `RFF+VA:${safeExtract(E1EDK01, "KUNDEUINR")}'`,
+        `RFF+XA:${safeExtract(E1EDK01, "KUNDEUINR")}'`
       );
     }
   });
 
-  // Dati pagamento
+  // DATI PAGAMENTO E VALUTA
   segments.push(
-    `CUX+2::${safeExtract(IDOC, 'E1EDK01.WAERK')}:4'`,
-    `DTM+134:${formatDate(safeExtract(IDOC, 'E1EDK03.DATUM'))}:102'`,
+    `CUX+2::${safeExtract(E1EDK01, "WAERK")}:4'`,
+    `DTM+134:${formatDate(safeExtract(E1EDK03, "DATUM"))}:102'`,
     `PYT+1++:2+D+30'`,
-    `DTM+171:${formatDate(safeExtract(IDOC, 'E1EDK03.DATUM'))}:102'`,
-    `FII+BF+:${safeExtract(IDOC, 'E1EDS01.KNUMV')}'`
+    `DTM+171:${formatDate(safeExtract(E1EDK03, "DATUM"))}:102'`,
+    `FII+BF+:${safeExtract(E1EDS01, "KNUMV")}'`
   );
 
-  // Righe documento
-  items.forEach((item, index) => {
+  // RIGHE DOCUMENTO
+  E1EDP01.forEach((item, index) => {
     segments.push(
-      `LIN+:${index + 1}++${safeExtract(item, 'IDTNR')}:IN'`,
-      `IMD+++1:++11::272:${safeExtract(item, 'KTEXT')}'`,
-      `QTY+47::${safeExtract(item, 'MENGE')}:PCE'`,
-      `ALI+:${safeExtract(item, 'HERKL')}'`,
-      `MOA+203:${formatNumber(safeExtract(item, 'E1EDK05.KRATE'))}:EUR'`,
-      `PRI+AAA:${formatNumber(safeExtract(item, 'E1EDK05.UPRBS'), 2)}::PCE:1'`,
-      `RFF+ON::${safeExtract(item, 'XABLN')}'`,
-      `RFF+AAK:${safeExtract(item, 'E1EDP04.MSATZ')}'`,
-      `DTM+171:${formatDate(safeExtract(IDOC, 'E1EDK03.DATUM'))}:102'`,
-      `TAX+7:VAT+++:::0'`
+      `LIN+:${index + 1}++${item.IDTNR}:IN'`,
+      `IMD+++1:++11::272:${item.KTEXT}'`,
+      `QTY+47::${item.MENGE}:${item.MENEE}'`,
+      `ALI+:${item.HERKL}'`,
+      `MOA+203:${formatNumber(item.E1EDK05.KRATE)}:EUR'`,
+      `PRI+AAA:${formatNumber(item.E1EDK05.UPRBS, 2)}::${
+        item.E1EDK05.MEAUN
+      }:1'`,
+      `RFF+ON::${item.XABLN}'`,
+      `RFF+AAK:${item.E1EDP04.MSATZ}'`,
+      `DTM+171:${formatDate(safeExtract(E1EDK03, "DATUM"))}:102'`,
+      `TAX+7:VAT+++:::0'`,
+      `MOA+125:${formatNumber(item.E1EDP19.MWSBT)}:EUR'`
     );
   });
 
-  // Totali
+  // TOTALI E CHIUSURA
   segments.push(
-    `CNT+2:${items.length}'`,
-    `MOA+77:${formatNumber(safeExtract(IDOC, 'E1EDS01.SUMME'))}:EUR'`,
-    `MOA+125:${formatNumber(safeExtract(IDOC, 'E1EDS01.BTWR'))}:EUR'`,
+    `CNT+2:${E1EDP01.length}'`,
+    `MOA+77:${formatNumber(safeExtract(E1EDS01, "SUMME"))}:EUR'`,
+    `MOA+125:${formatNumber(safeExtract(E1EDS01, "BTWR"))}:EUR'`,
     `MOA+176:0,00:EUR'`,
-    `MOA+79:${formatNumber(safeExtract(IDOC, 'E1EDS01.SUMME'))}:EUR'`,
+    `MOA+79:${formatNumber(safeExtract(E1EDS01, "SUMME"))}:EUR'`,
     `MOA+403:0,00:EUR'`,
     `TAX+7:VAT+++:::0'`,
     `MOA+124:0,00:EUR'`,
-    `MOA+125:${formatNumber(safeExtract(IDOC, 'E1EDS01.BTWR'))}:EUR'`,
-    `UNT+39:39'`,
+    `MOA+125:${formatNumber(safeExtract(E1EDS01, "BTWR"))}:EUR'`,
+    `UNT+${segments.length + 1}:${segments.length + 1}'`,
     `UNZ+1+1:2569'`
   );
 
-  return segments.join('\n');
+  return segments.join("\n");
 }
 
 // Endpoint
 fastify.post("/process-invoice", async (request, reply) => {
   try {
-    const xmlPath = path.join(__dirname, "test/InvoiceIdoc.xml");
+    const xmlPath = path.join(__dirname, "test/InvoiceIdoc2.xml");
     const ediPath = path.join(__dirname, "test/IDOC_EDI.txt");
 
     const xmlData = fs.readFileSync(xmlPath, "utf8");

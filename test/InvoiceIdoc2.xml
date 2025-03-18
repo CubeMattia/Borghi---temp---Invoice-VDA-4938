@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<IDOC xmlns="http://sap.com/idoc/INVOIC">
+    <!-- Testata Documento -->
+    <EDI_DC40>
+        <DOCNUM>000000000012345</DOCNUM>
+        <MESTYP>INVOIC</MESTYP>
+        <SNDPOR>SAPMAN</SNDPOR>
+        <RCVPOR>PARTNER_PORT</RCVPOR>
+        <CREDAT>2024-05-28</CREDAT>
+        <CRETIM>14:30:00</CRETIM>
+    </EDI_DC40>
+
+    <!-- Dati Principali Fattura -->
+    <E1EDK01>
+        <BELNR>INV-2024-001</BELNR>
+        <BSART>RE</BSART>
+        <BLDAT>2024-05-28</BLDAT>
+        <WAERK>EUR</WAERK>
+        <KUNDEUINR>IT01234567890</KUNDEUINR>
+        <BUKRS>IT01</BUKRS>
+        <CURCY>EUR</CURCY>
+    </E1EDK01>
+
+    <!-- Riferimenti Documento -->
+    <E1EDK02>
+        <QUALF>009</QUALF>
+        <BELNR>ORD-12345</BELNR>
+        <DATUM>2024-05-25</DATUM>
+    </E1EDK02>
+
+    <!-- Data Contabilità -->
+    <E1EDK03>
+        <IDDAT>026</IDDAT>
+        <DATUM>2024-05-28</DATUM>
+    </E1EDK03>
+
+    <!-- Partner Commerciali -->
+    <E1EDKA1>
+        <PARVW>RS</PARVW>        <!-- Seller -->
+        <PARTN>80068232</PARTN>
+        <NAME1>T.ERRE EUROPE SRL</NAME1>
+        <STRAS>VIA N.CENA 65</STRAS>
+        <ORT1>BRANDIZZO</ORT1>
+        <PSTLZ>10032</PSTLZ>
+        <LAND1>IT</LAND1>
+        <PAORG>IT03847471202</PAORG>
+    </E1EDKA1>
+
+    <E1EDKA1>
+        <PARVW>AG</PARVW>        <!-- Payer -->
+        <PARTN>CUSTOMER_123</PARTN>
+        <NAME1>CLIENTE SPA</NAME1>
+        <STRAS>VIA TORINO 2</STRAS>
+        <ORT1>ROMA</ORT1>
+        <PSTLZ>00100</PSTLZ>
+        <LAND1>IT</LAND1>
+    </E1EDKA1>
+
+    <!-- Dati Pagamento -->
+    <E1EDK18>
+        <ZTERM_TXT>Pagamento 30gg</ZTERM_TXT>
+    </E1EDK18>
+
+    <!-- Righe Fattura -->
+    <E1EDP01>
+        <POSEX>0001</POSEX>
+        <IDTNR>MAT-001</IDTNR>
+        <KTEXT>Prodotto X</KTEXT>
+        <MENGE>10</MENGE>
+        <MENEE>PC</MENEE>
+        <HERKL>IT</HERKL>
+        <XABLN>DLV-556677</XABLN>
+        <E1EDK05>
+            <KRATE>15.00</KRATE>
+            <MEAUN>PC</MEAUN>
+            <UPRBS>150.00</UPRBS>
+        </E1EDK05>
+        <E1EDP19>
+            <TAXCD>V1</TAXCD>
+            <NETWR>150.00</NETWR>
+            <MWSBT>33.00</MWSBT>
+        </E1EDP19>
+        <E1EDP04>
+            <MSATZ>22.00</MSATZ>
+        </E1EDP04>
+    </E1EDP01>
+
+    <!-- Totali -->
+    <E1EDS01>
+        <SUMME>183.00</SUMME>
+        <WAERQ>EUR</WAERQ>
+        <BTWR>183.00</BTWR>
+    </E1EDS01>
+</IDOC>
